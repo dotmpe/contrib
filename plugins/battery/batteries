@@ -66,7 +66,8 @@ my $sys_path  = '/sys/class/power_supply';
 
 my $proc_data_exists;
 my $sys_data_exists;
-my $batteryes_count;
+my $batteries_count;
+my $capacity_measure;
 
 sub trim
 {
@@ -79,7 +80,7 @@ sub trim
 	return $string;
 }
 
-sub get_batteryes_count
+sub get_batteries_count
 {
   my $path = $_[0];
   return 0 unless (-e $path);
@@ -100,20 +101,38 @@ sub get_batteryes_count
 
 sub init
 {
-  my $proc_batt_count = get_batteryes_count($proc_path);
-  my $sys_batt_count  = get_batteryes_count($sys_path );
+  my $proc_batt_count = get_batteries_count($proc_path);
+  my $sys_batt_count  = get_batteries_count($sys_path );
   #print "$proc_batt_count $sys_batt_count\n";
   $proc_data_exists = $proc_batt_count > 0;
   $sys_data_exists = $sys_batt_count   > 0;
   if ($proc_data_exists and $sys_data_exists and ($proc_batt_count != $sys_batt_count))
   {
-    die "Something wrong, batteryes count from $proc_path and $sys_path not equal (proc: $proc_batt_count, sys: $sys_batt_count)!"
+    die "Something wrong, batteries count from $proc_path and $sys_path not equal (proc: $proc_batt_count, sys: $sys_batt_count)!"
   }
-  if     ($proc_data_exists) { $batteryes_count = $proc_batt_count; }
-  elsif  ($sys_data_exists)  { $batteryes_count = $sys_batt_count;  }
-  unless ($batteryes_count)
+  if     ($proc_data_exists) { $batteries_count = $proc_batt_count; }
+  elsif  ($sys_data_exists)  { $batteries_count = $sys_batt_count;  }
+  unless ($batteries_count)
   {
-    die "Batteryes not found."
+    die "Batteries not found."
+  }
+  
+  # Check if the kernel measures 'charge' or 'energy'.
+  # NOTE: on X220 this can change between boots or after resume bc. of a feature
+  # in its acpi firmware
+  if ($sys_data_exists) {
+
+    # Does it measure Amps
+    if (-e "${sys_path}/BAT0/charge_full_design")
+    {
+      $capacity_measure = 'current';
+    }
+
+    # ... or Watts
+    elsif (-e "${sys_path}/BAT0/energy_full_design")
+    {
+      $capacity_measure = 'energy';
+    }
   }
 }
 
@@ -139,6 +158,7 @@ sub read_sys_data
 {
   my ($batt_num, $file) = @_[0..1];
   my $file_content = "nan";
+  say STDERR "Opening ${sys_path}/BAT${batt_num}/${file}";
   open(FH, '<', "${sys_path}/BAT${batt_num}/${file}") or die $!;
   $file_content = <FH>;
   close(FH);
@@ -156,7 +176,7 @@ sub percent
 sub read_info
 {
   my $info;
-  for (my $i = 0; $i < $batteryes_count; $i++)
+  for (my $i = 0; $i < $batteries_count; $i++)
   {
     if($sys_data_exists)
     {
@@ -180,17 +200,27 @@ sub read_info
 sub read_data
 {
   my $data;
-  for (my $i = 0; $i < $batteryes_count; $i++)
+  for (my $i = 0; $i < $batteries_count; $i++)
   {
     if($sys_data_exists)
     {
       my $divider = 1000000; # need for equvivalent sys and proc data
-      $data->{$i}{'design_capacity'}    = read_sys_data($i, 'charge_full_design')/$divider;
-      $data->{$i}{'last_full_capacity'} = read_sys_data($i, 'charge_full')       /$divider;
-      $data->{$i}{'remaining_capacity'} = read_sys_data($i, 'charge_now')        /$divider;
       $data->{$i}{'design_voltage'}     = read_sys_data($i, 'voltage_min_design')/$divider;
       $data->{$i}{'present_voltage'}    = read_sys_data($i, 'voltage_now')       /$divider;
-      $data->{$i}{'present_rate'}       = read_sys_data($i, 'current_now')       /$divider;
+      if ("$capacity_measure" eq 'current')
+      {
+        $data->{$i}{'design_capacity'}    = read_sys_data($i, 'charge_full_design')/$divider;
+        $data->{$i}{'last_full_capacity'} = read_sys_data($i, 'charge_full')       /$divider;
+        $data->{$i}{'remaining_capacity'} = read_sys_data($i, 'charge_now')        /$divider;
+        $data->{$i}{'present_rate'}       = read_sys_data($i, 'current_now')       /$divider;
+      } elsif ("$capacity_measure" eq 'energy')
+      {
+        # Now divide Watt by Volts to get Amp back ....
+        $divider += $data->{$i}{'present_voltage'};
+        $data->{$i}{'design_capacity'}    = read_sys_data($i, 'energy_full_design')/$divider;
+        $data->{$i}{'last_full_capacity'} = read_sys_data($i, 'energy_full')       /$divider;
+        $data->{$i}{'remaining_capacity'} = read_sys_data($i, 'energy_now')        /$divider;
+      }
     }
     if($proc_data_exists)
     {
@@ -221,13 +251,13 @@ sub read_data
 
 my $graphs =
 {
-  'batteryes_capacity' => { 'vlabel' => 'Capacity, Ah', 'title' => '%s capacity', 'args' => '--base 1000',
+  'batteries_capacity' => { 'vlabel' => 'Capacity, Ah', 'title' => '%s capacity', 'args' => '--base 1000',
                             'fields' => [qw/design_capacity last_full_capacity design_capacity_low design_capacity_warning capacity_granularity_1 capacity_granularity_2 remaining_capacity/] },
-  'batteryes_voltage'  => { 'vlabel' => 'Voltage, V'  , 'title' => '%s voltage' , 'args' => '--base 1000',
+  'batteries_voltage'  => { 'vlabel' => 'Voltage, V'  , 'title' => '%s voltage' , 'args' => '--base 1000',
                             'fields' => [qw/design_voltage present_voltage/] },
-  'batteryes_percents' => { 'vlabel' => '%'            , 'title' => '%s percents', 'args' => '--base 1000 --upper-limit 100 -l 0',
+  'batteries_percents' => { 'vlabel' => '%'            , 'title' => '%s percents', 'args' => '--base 1000 --upper-limit 100 -l 0',
                             'fields' => [qw/current_voltage_percent current_capacity_percent full_capacity_percent/] },
-  'batteryes_current'  => { 'vlabel' => 'Current, A'  , 'title' => '%s current' , 'args' => '--base 1000',
+  'batteries_current'  => { 'vlabel' => 'Current, A'  , 'title' => '%s current' , 'args' => '--base 1000',
                             'fields' => [qw/present_rate/] }
 };
 
@@ -265,7 +295,7 @@ if ($ARGV[0] and $ARGV[0] eq "config")
   foreach my $graph (keys %{$graphs})
   {
     my @order;
-    $config{$graph}{'graph'}{'title'}    = sprintf($graphs->{$graph}{'title'}, 'Mean batteryes');
+    $config{$graph}{'graph'}{'title'}    = sprintf($graphs->{$graph}{'title'}, 'Mean batteries');
     $config{$graph}{'graph'}{'args'}     = $graphs->{$graph}{'args'};
     $config{$graph}{'graph'}{'vlabel'}   = $graphs->{$graph}{'vlabel'};
     $config{$graph}{'graph'}{'category'} = 'sensors';
@@ -281,7 +311,7 @@ if ($ARGV[0] and $ARGV[0] eq "config")
       }
     }
     $config{$graph}{'graph'}{'order'} = join(' ', @order);
-    for (my $i = 0; $i < $batteryes_count; $i++)
+    for (my $i = 0; $i < $batteries_count; $i++)
     {
       my @b_order;
       my $battery_name = sprintf("BAT%s", $i);
@@ -335,15 +365,15 @@ foreach my $graph (sort keys %{$graphs})
     my $field_summ = 0;
     if(($proc_data_exists and $fields->{$field}{'source'} eq 'proc') or $fields->{$field}{'source'} eq 'both')
     {
-      for (my $i = 0; $i < $batteryes_count; $i++)
+      for (my $i = 0; $i < $batteries_count; $i++)
       {
         $field_summ += $data->{$i}{$field};
       }
-      printf("%s.value %s\n", $field, $field_summ/$batteryes_count);
+      printf("%s.value %s\n", $field, $field_summ/$batteries_count);
     }
   }
   print "\n";
-  for (my $i = 0; $i < $batteryes_count; $i++)
+  for (my $i = 0; $i < $batteries_count; $i++)
   {
     my $graph_name = sprintf("%s.BAT%s", $graph, $i);
     printf ("multigraph %s\n", $graph_name);
