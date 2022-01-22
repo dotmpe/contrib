@@ -216,10 +216,11 @@ sub read_data
       } elsif ("$capacity_measure" eq 'energy')
       {
         # Now divide Watt by Volts to get Amp back ....
-        $divider += $data->{$i}{'present_voltage'};
+        $divider += $data->{$i}{'present_voltage'} * 10;
         $data->{$i}{'design_capacity'}    = read_sys_data($i, 'energy_full_design')/$divider;
         $data->{$i}{'last_full_capacity'} = read_sys_data($i, 'energy_full')       /$divider;
         $data->{$i}{'remaining_capacity'} = read_sys_data($i, 'energy_now')        /$divider;
+        $data->{$i}{'present_rate'}       = read_sys_data($i, 'power_now')         /$divider;
       }
     }
     if($proc_data_exists)
