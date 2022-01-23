@@ -158,7 +158,6 @@ sub read_sys_data
 {
   my ($batt_num, $file) = @_[0..1];
   my $file_content = "nan";
-  say STDERR "Opening ${sys_path}/BAT${batt_num}/${file}";
   open(FH, '<', "${sys_path}/BAT${batt_num}/${file}") or die $!;
   $file_content = <FH>;
   close(FH);
