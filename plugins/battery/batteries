@@ -320,7 +320,7 @@ if ($ARGV[0] and $ARGV[0] eq "config")
       my $graph_name   = sprintf("%s.%s", $graph, $battery_name);
       $config{$graph_name}{'graph'}{'title'}    = sprintf($graphs->{$graph}{'title'}, $battery_name);
       $config{$graph_name}{'graph'}{'info'}     = sprintf("%s battery %s %s (sn: %s)", $info->{$i}{'battery_type'}, $info->{$i}{'manufacturer'}, $info->{$i}{'model_name'}, $info->{$i}{'serial_number'});
-      $config{$graph_name}{'graph'}{'args'}     = '--base 1000 -l';
+      $config{$graph_name}{'graph'}{'args'}     = '--base 1000';
       $config{$graph_name}{'graph'}{'vlabel'}   = $graphs->{$graph}{'vlabel'};
       $config{$graph_name}{'graph'}{'category'} = 'sensors';
       foreach my $field (@{$graphs->{$graph}{'fields'}})
