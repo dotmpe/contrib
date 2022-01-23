@@ -253,7 +253,7 @@ sub read_data
 
 my $graphs =
 {
-  'batteries_capacity' => { 'vlabel' => 'Capacity, Ah', 'title' => '%s capacity', 'args' => '--base 1000',
+  'batteries_capacity' => { 'vlabel' => 'Capacity, Ah', 'title' => '%s capacity', 'args' => '--base 1000 -l 0',
                             'fields' => [qw/design_capacity last_full_capacity design_capacity_low design_capacity_warning capacity_granularity_1 capacity_granularity_2 remaining_capacity/] },
   'batteries_voltage'  => { 'vlabel' => 'Voltage, V'  , 'title' => '%s voltage' , 'args' => '--base 1000',
                             'fields' => [qw/design_voltage present_voltage/] },
@@ -320,7 +320,7 @@ if ($ARGV[0] and $ARGV[0] eq "config")
       my $graph_name   = sprintf("%s.%s", $graph, $battery_name);
       $config{$graph_name}{'graph'}{'title'}    = sprintf($graphs->{$graph}{'title'}, $battery_name);
       $config{$graph_name}{'graph'}{'info'}     = sprintf("%s battery %s %s (sn: %s)", $info->{$i}{'battery_type'}, $info->{$i}{'manufacturer'}, $info->{$i}{'model_name'}, $info->{$i}{'serial_number'});
-      $config{$graph_name}{'graph'}{'args'}     = '--base 1000';
+      $config{$graph_name}{'graph'}{'args'}     = '--base 1000 -l';
       $config{$graph_name}{'graph'}{'vlabel'}   = $graphs->{$graph}{'vlabel'};
       $config{$graph_name}{'graph'}{'category'} = 'sensors';
       foreach my $field (@{$graphs->{$graph}{'fields'}})
